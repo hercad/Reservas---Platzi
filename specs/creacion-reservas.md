@@ -1,8 +1,7 @@
 # Spec: Módulo de Creación y Gestión de Reservas
+
 > **Estado:** Draft | **Última actualización:** 2026-09-30
 > **Ubicación de Arquitectura:** Bounded Context / Módulo de Reservas y Gestión
-
----
 
 ## 1. Contexto y Delimitación del Dominio
 
@@ -13,44 +12,50 @@ Permitir a los usuarios autenticados explorar la disponibilidad y gestionar rese
 ### 1.2 Objetivos (Goals) vs. No-Objetivos (Non-Goals)
 
 * **In-Scope:**
-* Autenticación básica de usuarios.
-* Exploración de grilla de 24 horas (bloques de 1 hora) para las 5 canchas fijas.
-* Creación atómica de reservas con prevención de condiciones de carrera.
-* Panel de gestión de reservas propias (visualización y cancelación de turnos futuros).
-* Restricción de una sola reserva activa por usuario de forma simultánea.
 
+  * Autenticación básica de usuarios.
+
+  * Exploración de grilla de 24 horas (bloques de 1 hora) para las 5 canchas fijas.
+
+  * Creación atómica de reservas con prevención de condiciones de carrera.
+
+  * Panel de gestión de reservas propias (visualización y cancelación de turnos futuros).
+
+  * Restricción de una sola reserva activa por usuario de forma simultánea.
 
 * **Out-of-Scope:**
-* Pasarela de pagos integrada (pago presencial en sede).
-* Panel de administración web para modificar canchas (catálogo inmutable en código).
-* Notificaciones externas (SMS, WhatsApp o correos electrónicos).
-* Reservas continuas de más de 1 hora en un solo clic o sistemas de matchmaking.
 
+  * Pasarela de pagos integrada (pago presencial en sede).
 
+  * Panel de administración web para modificar canchas (catálogo inmutable en código).
+
+  * Notificaciones externas (SMS, WhatsApp o correos electrónicos).
+
+  * Reservas continuas de más de 1 hora en un solo clic o sistemas de matchmaking.
 
 ### 1.3 Lenguaje Ubicuo
 
-| Término | Definición | Ejemplo / Comentario |
-| --- | --- | --- |
-| **Catálogo Cerrado** | Conjunto inmutable de 5 canchas físicas predefinidas en el sistema. | Cancha Laureles, El Poblado, Belén, Robledo, Envigado. |
-| **Bloque Disponible** | Franja horaria de 1 hora libre de asignaciones previas en la grilla. | Slot de 14:00 a 15:00 en Cancha Laureles. |
-| **Colisión de Concurrencia** | Intento simultáneo de dos usuarios por reservar el mismo slot al mismo milisegundo. | Resuelto mediante índice único compuesto en base de datos (`409 Conflict`). |
-| **Reserva Activa** | Turno futuro confirmado que actualmente detenta el usuario en el sistema. | El usuario solo puede tener una a la vez. |
-
----
+| **Término** | **Definición** | **Ejemplo / Comentario** | 
+| **Catálogo Cerrado** | Conjunto inmutable de 5 canchas físicas predefinidas en el sistema. | Cancha Laureles, El Poblado, Belén, Robledo, Envigado. | 
+| **Bloque Disponible** | Franja horaria de 1 hora libre de asignaciones previas en la grilla. | Slot de 14:00 a 15:00 en Cancha Laureles. | 
+| **Colisión de Concurrencia** | Intento simultáneo de dos usuarios por reservar el mismo slot al mismo milisegundo. | Resuelto mediante índice único compuesto en base de datos (`409 Conflict`). | 
+| **Reserva Activa** | Turno futuro confirmado que actualmente detenta el usuario en el sistema. | El usuario solo puede tener una a la vez. | 
 
 ## 2. Especificación Funcional y Reglas de Negocio
 
 ### 2.1 Reglas de Negocio
 
-* **[RN-001] Catálogo Inmutable:** El sistema opera estrictamente sobre las 5 canchas definidas en el código (`Cancha Laureles`, `Cancha El Poblado`, `Cancha Belén`, `Cancha Robledo`, `Cancha Envigado`).
-* **[RN-002] Restricción Temporal:** El sistema DEBE rechazar cualquier intento de reserva en fechas u horarios pasados respecto al timestamp actual del servidor.
-* **[RN-003] Granularidad y Límite:** Las reservas se estructuran estrictamente en bloques enteros de 1 hora. Un usuario no puede acumular más de una (1) reserva activa simultáneamente.
-* **[RN-004] Prevención de Colisión:** El sistema validará la disponibilidad en la base de datos de forma atómica. Si ocurre una condición de carrera, se retornará un código HTTP `409`.
+* **\[RN-001\] Catálogo Inmutable:** El sistema opera estrictamente sobre las 5 canchas definidas en el código (`Cancha Laureles`, `Cancha El Poblado`, `Cancha Belén`, `Cancha Robledo`, `Cancha Envigado`).
+
+* **\[RN-002\] Restricción Temporal:** El sistema DEBE rechazar cualquier intento de reserva en fechas u horarios pasados respecto al timestamp actual del servidor.
+
+* **\[RN-003\] Granularidad y Límite:** Las reservas se estructuran estrictamente en bloques enteros de 1 hora. Un usuario no puede acumular más de una (1) reserva activa simultáneamente.
+
+* **\[RN-004\] Prevención de Colisión:** El sistema validará la disponibilidad en la base de datos de forma atómica. Si ocurre una condición de carrera, se retornará un código HTTP `409`.
 
 ### 2.2 Flujo Principal de Creación
 
-```mermaid
+```
 graph TD
     A[Usuario autenticado selecciona Cancha, Fecha y Hora] --> B{¿Tiene reserva activa previa?}
     B -- Sí --> C[Rechazar: Límite de 1 reserva activa]
@@ -62,6 +67,40 @@ graph TD
 
 ```
 
-```
+## 3. Historias de Usuario y Criterios de Aceptación
 
-```
+### US-01: Restricción de Única Reserva Activa
+
+> **Como** usuario autenticado,
+>
+> **quiero** que el sistema impida registrar un nuevo turno si ya poseo una reserva futura activa,
+>
+> **para** garantizar la equidad de uso de las canchas entre todos los miembros.
+
+* **Criterios de Aceptación (EARS):**
+
+  * *Mientras* el usuario tenga una reserva activa con fecha futura, *el sistema deberá* rechazar cualquier solicitud de nueva reserva y retornar un código HTTP `400`.
+
+* **Criterios de Aceptación (Given-When-Then):**
+
+  * **Given** que el usuario "Carlos" tiene una reserva confirmada para el próximo sábado en la Cancha Laureles.
+
+  * **When** intenta crear una segunda reserva para el domingo en la Cancha El Poblado.
+
+  * **Then** el sistema rechaza la operación y muestra el mensaje amigable: *"Ya posees una reserva activa. Debes cancelarla antes de crear una nueva"*.
+
+### US-02: Prevención Atómica de Colisiones (Double-Booking)
+
+> **Como** sistema de reservas,
+>
+> **debo** validar la unicidad del bloque horario a nivel de motor de base de datos,
+>
+> **para** evitar condiciones de carrera (*race conditions*) cuando dos usuarios intenten apartar el mismo slot simultáneamente.
+
+* **Criterios de Aceptación (Given-When-Then):**
+
+  * **Given** que el slot de las 14:00 del día 2026-10-01 en la Cancha Robledo se encuentra disponible.
+
+  * **When** dos usuarios diferentes envían una petición HTTP POST para reservarlo exactamente al mismo milisegundo.
+
+  * **Then** el motor de base de datos aplica la restricción de índice único, permitiendo la transacción del primer usuario (HTTP `201 Created`) y rechazando la del segundo con un código HTTP `409 Conflict`.
