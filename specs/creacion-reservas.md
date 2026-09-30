@@ -1,4 +1,3 @@
-```markdown
 # Spec: Módulo de Creación de Reservas
 > **Estado:** Draft | **Última actualización:** 2026-09-30
 > **Ubicación de Arquitectura:** Bounded Context / Módulo de Reservas
