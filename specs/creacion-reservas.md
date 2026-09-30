@@ -2,8 +2,6 @@
 > **Estado:** Draft | **Última actualización:** 2026-09-30
 > **Ubicación de Arquitectura:** Bounded Context / Módulo de Reservas y Gestión
 
-```
-
 ---
 
 ## 1. Contexto y Delimitación del Dominio
