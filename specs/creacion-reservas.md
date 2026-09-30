@@ -31,39 +31,40 @@ Permitir a los usuarios autenticados explorar la disponibilidad y gestionar rese
 
   * Notificaciones externas (SMS, WhatsApp o correos electrónicos).
 
-  * Reservas continuas de más de 1 hora en un solo clic o sistemas de matchmaking.
+  * Reservas continuas de más de 1 solo clic o sistemas de matchmaking.
 
 ### 1.3 Lenguaje Ubicuo
 
 | **Término** | **Definición** | **Ejemplo / Comentario** | 
+| --- | --- | --- |
 | **Catálogo Cerrado** | Conjunto inmutable de 5 canchas físicas predefinidas en el sistema. | Cancha Laureles, El Poblado, Belén, Robledo, Envigado. | 
 | **Bloque Disponible** | Franja horaria de 1 hora libre de asignaciones previas en la grilla. | Slot de 14:00 a 15:00 en Cancha Laureles. | 
 | **Colisión de Concurrencia** | Intento simultáneo de dos usuarios por reservar el mismo slot al mismo milisegundo. | Resuelto mediante índice único compuesto en base de datos (`409 Conflict`). | 
-| **Reserva Activa** | Turno futuro confirmado que actualmente detenta el usuario en el sistema. | El usuario solo puede tener una a la vez. | 
+| **Reserva Activa** | Turno futuro confirmado que actualmente detenta el usuario en el sistema. | El usuario solo puede tener una a la vez; expira automáticamente si el turno ya transcurrió. | 
 
 ## 2. Especificación Funcional y Reglas de Negocio
 
-### 2.1 Reglas de Negocio
+### 2.1 Reglas de Negocio (Clarificadas)
 
-* **\[RN-001\] Catálogo Inmutable:** El sistema opera estrictamente sobre las 5 canchas definidas en el código (`Cancha Laureles`, `Cancha El Poblado`, `Cancha Belén`, `Cancha Robledo`, `Cancha Envigado`).
+* **[RN-001] Catálogo Inmutable:** El sistema opera estrictamente sobre las 5 canchas definidas en el código (`Cancha Laureles`, `Cancha El Poblado`, `Cancha Belén`, `Cancha Robledo`, `Cancha Envigado`).
 
-* **\[RN-002\] Restricción Temporal:** El sistema DEBE rechazar cualquier intento de reserva en fechas u horarios pasados respecto al timestamp actual del servidor.
+* **[RN-002] Restricción Temporal y Zona Horaria:** Todas las validaciones temporales se evalúan estrictamente contra el servidor en formato UTC y hora local del sistema (ISO 8601). El sistema DEBE rechazar cualquier intento de reserva en fechas u horarios pasados.
 
-* **\[RN-003\] Granularidad y Límite:** Las reservas se estructuran estrictamente en bloques enteros de 1 hora. Un usuario no puede acumular más de una (1) reserva activa simultáneamente.
+* **[RN-003] Granularidad y Ciclo de Vida de Reserva Activa:** Las reservas se estructuran en bloques enteros de 1 hora. Un usuario solo puede tener una (1) reserva activa simultáneamente. Una reserva se considera "activa" de forma estricta si su fecha y hora de finalización son mayores a la hora actual del servidor (`reservation_date >= hoy AND end_hour > hora_actual`). Si el turno transcurre, deja de ser activa automáticamente.
 
-* **\[RN-004\] Prevención de Colisión:** El sistema validará la disponibilidad en la base de datos de forma atómica. Si ocurre una condición de carrera, se retornará un código HTTP `409`.
+* **[RN-004] Prevención de Colisión y Manejo de Errores:** El sistema validará la disponibilidad en la base de datos de forma atómica. Si ocurre una condición de carrera, el backend interceptará el error de restricción única y retornará un código HTTP `409 Conflict` con un JSON estructurado indicando que el turno acaba de ser ocupado.
 
 ### 2.2 Flujo Principal de Creación
 
 ```
 graph TD
-    A[Usuario autenticado selecciona Cancha, Fecha y Hora] --> B{¿Tiene reserva activa previa?}
+    A[Usuario autenticado selecciona Cancha, Fecha y Hora] --> B{¿Tiene reserva activa futura vigente?}
     B -- Sí --> C[Rechazar: Límite de 1 reserva activa]
-    B -- No --> D{¿Es fecha/hora futura?}
+    B -- No --> D{¿Es fecha/hora futura (UTC)?}
     D -- No --> E[Rechazar: Error de Tiempo]
     D -- Sí --> F[Intentar persistir en DB con Índice Único]
     F -- Éxito --> G[Confirmar Reserva: 201 Created]
-    F -- Fallo por Colisión --> H[Retornar Conflicto: HTTP 409]
+    F -- Fallo por Colisión --> H[Retornar Conflicto estructurado: HTTP 409]
 
 ```
 
@@ -79,7 +80,7 @@ graph TD
 
 * **Criterios de Aceptación (EARS):**
 
-  * *Mientras* el usuario tenga una reserva activa con fecha futura, *el sistema deberá* rechazar cualquier solicitud de nueva reserva y retornar un código HTTP `400`.
+  * *Mientras* el usuario tenga una reserva activa vigente (con fecha y hora de finalización futuras), *el sistema deberá* rechazar cualquier solicitud de nueva reserva y retornar un código HTTP `400`.
 
 * **Criterios de Aceptación (Given-When-Then):**
 
@@ -89,7 +90,7 @@ graph TD
 
   * **Then** el sistema rechaza la operación y muestra el mensaje amigable: *"Ya posees una reserva activa. Debes cancelarla antes de crear una nueva"*.
 
-### US-02: Prevención Atómica de Colisiones (Double-Booking)
+### US-02: Prevención Atómica de Concurrencia (Double-Booking)
 
 > **Como** sistema de reservas,
 >
@@ -103,4 +104,4 @@ graph TD
 
   * **When** dos usuarios diferentes envían una petición HTTP POST para reservarlo exactamente al mismo milisegundo.
 
-  * **Then** el motor de base de datos aplica la restricción de índice único, permitiendo la transacción del primer usuario (HTTP `201 Created`) y rechazando la del segundo con un código HTTP `409 Conflict`.
+  * **Then** el motor de base de datos aplica la restricción de índice único, permitiendo la transacción del primer usuario (HTTP `201 Created`) y rechazando la del segundo con un código HTTP `409 Conflict` y un mensaje claro para que elija otro turno.
